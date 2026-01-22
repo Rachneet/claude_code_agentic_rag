@@ -50,7 +50,7 @@ Technically-minded people who want to build production RAG systems using AI codi
 
 | Layer | Choice |
 |-------|--------|
-| Frontend | React + Vite + Tailwind + shadcn/ui |
+| Frontend | React + TypeScript + Vite + Tailwind + shadcn/ui |
 | Backend | Python + FastAPI |
 | Database | Supabase (Postgres + pgvector + Auth + Storage + Realtime) |
 | LLM (Module 1) | OpenAI (Assistants API for managed RAG) |
