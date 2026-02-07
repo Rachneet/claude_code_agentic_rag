@@ -53,13 +53,14 @@ Technically-minded people who want to build production RAG systems using AI codi
 | Frontend | React + TypeScript + Vite + Tailwind + shadcn/ui |
 | Backend | Python + FastAPI |
 | Database | Supabase (Postgres + pgvector + Auth + Storage + Realtime) |
-| LLM (Module 1) | OpenAI Responses API (managed threads + file_search) |
-| LLM (Module 2+) | Any OpenAI-compatible endpoint (OpenRouter, Ollama, LM Studio, etc.) |
+| LLM (Module 1) | HuggingFace Inference (serverless inference API) |
+| LLM (Module 2) | Google Generative AI (Gemini models) |
+| LLM (Module 3) | OpenRouter (multi-provider access) |
 | Observability | LangSmith |
 
 ## Constraints
 
-- No LLM frameworks - raw OpenAI SDK using the standard Chat Completions API (OpenAI-compatible), Pydantic for structured outputs
+- No LLM frameworks - raw SDK calls using standard APIs, Pydantic for structured outputs
 - Row-Level Security on all tables - users only see their own data
 - Streaming chat via SSE
 - Ingestion status via Supabase Realtime
@@ -68,30 +69,30 @@ Technically-minded people who want to build production RAG systems using AI codi
 
 ## Module 1: The App Shell + Observability
 
-**Build:** Auth, chat UI, OpenAI Responses API (manages threads + file_search), LangSmith tracing
+**Build:** Auth, chat UI, HuggingFace Inference integration (direct API calls), LangSmith tracing
 
-**Learn:** What RAG is, why managed RAG exists, its limitations (OpenAI handles memory and retrieval - black box)
+**Learn:** What RAG is, using serverless inference APIs, building chat interfaces with streaming responses
 
-**Note:** The Responses API is OpenAI-specific. It provides managed threads and built-in file search, but locks you into OpenAI. Module 2 transitions to the standard Chat Completions API for provider flexibility.
+**Note:** HuggingFace Inference provides serverless access to various models (Llama, Mistral, Zephyr, etc.). Unlike OpenAI's managed Responses API, you'll build your own thread management and retrieval logic from the start, giving you full control and portability.
 
 ---
 
-## Architectural Decision: Module 1 → Module 2 Transition
+## Architectural Decision: Module 1 → Module 2 and 3 Transition
 
-At the end of Module 1, you have a working chat app using OpenAI's **Responses API**—a managed solution where OpenAI handles threads, memory, and file search. In Module 2, you switch to the standard **Chat Completions API** to support any OpenAI-compatible provider (OpenRouter, Ollama, LM Studio, etc.).
+At the end of Module 1, you have a working chat app using **HuggingFace Inference API**—a serverless solution where you manage threads, memory, and retrieval yourself. In Module 2, you switch to **Google Generative AI (Gemini)** to explore different model capabilities and API patterns. In Module 3, you integrate **OpenRouter** for multi-provider access.
 
-**The decision you need to make:** What do you do with the Responses API code? Here are two common approaches, but you're not limited to these—come up with your own if it makes sense for your use case.
+**The decision you need to make:** How do you structure your codebase to support multiple LLM providers? Here are two common approaches, but you're not limited to these—come up with your own if it makes sense for your use case.
 
 | Option | Approach | Pros | Cons |
 |--------|----------|------|------|
-| **A: Replace** | Remove Responses API code entirely, rebuild on Chat Completions | Clean codebase, single pattern, easier to maintain | Lose the ability to use OpenAI's managed RAG |
-| **B: Dual Support** | Keep Responses API alongside Chat Completions, configurable per request | Flexibility to use either approach, compare them side-by-side | More complex codebase, two patterns to understand |
+| **A: Replace** | Remove previous provider code entirely, rebuild with new provider | Clean codebase, single pattern, easier to maintain | Lose the ability to use previous providers |
+| **B: Provider Abstraction** | Build a provider interface, support multiple backends via configuration | Flexibility to switch providers, compare performance/cost | More complex codebase, abstraction overhead |
 
 There is no right answer—this is a real architectural choice you'll face in building production systems.
 
-**In the video, I chose Option A**—completely removing the Responses API code from the codebase and any related schema from the database. This keeps things simple and focused on the OpenAI-compatible Chat Completions pattern going forward.
+**Recommended approach for learning: Option B**—build a provider abstraction layer that allows you to configure which LLM provider to use via environment variables. This teaches you how to build flexible, provider-agnostic systems.
 
-**This is a lesson in steering Claude Code**: you need to clearly communicate your decision and guide the AI to implement it correctly. Be explicit about what you want removed, refactored, or kept.
+**This is a lesson in steering Claude Code**: you need to clearly communicate your decision and guide the AI to implement it correctly. Be explicit about the abstraction pattern, configuration mechanism, and how providers should be swapped.
 
 ---
 
@@ -99,13 +100,21 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 **Prerequisites:** Complete the architectural decision above.
 
-**Build:** Ingestion UI, file storage, chunking → embedding → pgvector, retrieval tool, Chat Completions API integration (OpenRouter/Ollama/LM Studio), chat history storage (stateless API - you manage memory now), realtime ingestion status
+**Build:** Ingestion UI, file storage, chunking → embedding → pgvector, retrieval tool, Google Generative AI (Gemini) integration, chat history storage (stateless API - you manage memory), realtime ingestion status
 
-**Learn:** Chunking, embeddings, vector search, tool calling, relevance thresholds, managing conversation history, **steering AI agents through architectural refactoring**
+**Learn:** Chunking, embeddings, vector search, tool calling with Gemini, relevance thresholds, managing conversation history, **building provider abstractions**
 
 ---
 
-## Module 3: Record Manager
+## Module 3: Multi-Provider Support
+
+**Build:** OpenRouter integration, provider configuration system, unified interface across HF/Gemini/OpenRouter
+
+**Learn:** Building provider-agnostic systems, cost/performance tradeoffs, fallback strategies
+
+---
+
+## Module 4: Record Manager
 
 **Build:** Content hashing, detect changes, only process what's new/modified
 
@@ -113,7 +122,7 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 ---
 
-## Module 4: Metadata Extraction
+## Module 5: Metadata Extraction
 
 **Build:** LLM extracts structured metadata, filter retrieval by metadata
 
@@ -121,7 +130,7 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 ---
 
-## Module 5: Multi-Format Support
+## Module 6: Multi-Format Support
 
 **Build:** PDF/DOCX/HTML/Markdown via docling, cascade deletes
 
@@ -129,7 +138,7 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 ---
 
-## Module 6: Hybrid Search & Reranking
+## Module 7: Hybrid Search & Reranking
 
 **Build:** Keyword + vector search, RRF combination, reranking
 
@@ -137,7 +146,7 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 ---
 
-## Module 7: Additional Tools
+## Module 8: Additional Tools
 
 **Build:** Text-to-SQL tool (query structured data), web search fallback (when docs don't have the answer)
 
@@ -145,7 +154,7 @@ There is no right answer—this is a real architectural choice you'll face in bu
 
 ---
 
-## Module 8: Sub-Agents
+## Module 9: Sub-Agents
 
 **Build:** Detect full-document scenarios, spawn isolated sub-agent with its own tools, nested tool call display in UI, show reasoning from both main agent and sub-agents
 
@@ -162,4 +171,5 @@ By the end, students should have:
 - ✅ Ability to direct AI coding tools to build new features
 - ✅ Ability to direct AI coding tools to debug and fix issues
 - ✅ Experience with agentic patterns (multi-tool, sub-agents)
+- ✅ Experience with multiple LLM providers and abstraction patterns
 - ✅ Observability set up from day one

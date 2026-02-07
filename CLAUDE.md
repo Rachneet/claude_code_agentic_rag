@@ -6,7 +6,7 @@ RAG app with chat (default) and document ingestion interfaces. Config via env va
 - Frontend: React + Vite + Tailwind + shadcn/ui
 - Backend: Python + FastAPI
 - Database: Supabase (Postgres, pgvector, Auth, Storage, Realtime)
-- LLM: OpenAI (Module 1), OpenRouter (Module 2+)
+- LLM: HuggingFace Inference (Module 1), Google Generative AI (Module 2), OpenRouter (Module 3)
 - Observability: LangSmith
 
 ## Rules
