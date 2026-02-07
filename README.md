@@ -1,10 +1,6 @@
-# Cloud Code Agentic RAG Masterclass
+# Cloud Code Agentic RAG
 
-Build an agentic RAG application from scratch by collaborating with Claude Code. Follow along with our video series using the docs in this repo.
-
-[![Claude Code RAG Masterclass](./video-thumbnail.png)](https://www.youtube.com/watch?v=xgPWCuqLoek)
-
-[Watch the full video on YouTube](https://www.youtube.com/watch?v=xgPWCuqLoek)
+Build an agentic RAG application from scratch by collaborating with Claude Code. 
 
 ## What This Is
 
@@ -27,7 +23,7 @@ A hands-on course where you collaborate with Claude Code to build a full-feature
 | Backend | Python, FastAPI |
 | Database | Supabase (Postgres + pgvector + Auth + Storage) |
 | Doc Processing | Docling |
-| AI Models | Local (LM Studio) or Cloud (OpenAI, OpenRouter) |
+| AI Models | Local (LM Studio), Cloud (OpenAI, OpenRouter), HuggingFace Inference |
 | Observability | LangSmith |
 
 ## The 8 Modules
@@ -54,7 +50,3 @@ A hands-on course where you collaborate with Claude Code to build a full-feature
 - [PRD.md](./PRD.md) — What to build (the 8 modules in detail)
 - [CLAUDE.md](./CLAUDE.md) — Context for Claude Code
 - [PROGRESS.md](./PROGRESS.md) — Track your build progress
-
-## Join the Community
-
-If you want to connect with hundreds of builders creating production-grade AI and RAG systems, join us in [The AI Automators community](https://www.theaiautomators.com/). Share your progress, get help when you're stuck, and see what others are building.
