@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Callable
 
 
 class LLMProvider(ABC):
@@ -14,6 +16,11 @@ class LLMProvider(ABC):
     ) -> str:
         """Non-streaming completion (e.g. for title generation)."""
         ...
+
+    @property
+    def supports_tools(self) -> bool:
+        """Whether this provider supports tool calling."""
+        return False
 
     @abstractmethod
     async def chat_completion_stream(
@@ -38,11 +45,27 @@ class LLMProvider(ABC):
         """
         raise NotImplementedError(f"{self.__class__.__name__} does not support tool calling")
 
+    def format_tool_messages(
+        self,
+        tool_calls_response: dict,
+        tool_results: list[dict],
+    ) -> list[dict]:
+        """Format tool call + result messages for appending to conversation.
+
+        Args:
+            tool_calls_response: Dict from chat_completion_with_tools with 'tool_calls' list.
+            tool_results: List of {"name": str, "result": str} dicts.
+
+        Returns:
+            List of message dicts (assistant tool-call message + tool result messages).
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support tool message formatting")
+
     async def chat_completion_stream_with_tools(
         self,
         messages: list[dict],
         tools: list[dict],
-        tool_executor: callable,
+        tool_executor: Callable,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> AsyncGenerator[str, None]:

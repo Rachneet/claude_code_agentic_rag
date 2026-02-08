@@ -96,3 +96,36 @@ export async function apiStreamChat(
     }
   }
 }
+
+export async function apiUploadDocument(file: File) {
+  const token = await getAccessToken()
+
+  const formData = new FormData()
+  formData.append("file", file)
+
+  const response = await fetch(`${API_URL}/api/documents/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }))
+    throw new Error(error.detail || `HTTP ${response.status}`)
+  }
+
+  return response.json()
+}
+
+export async function apiListDocuments() {
+  const response = await apiFetch("/api/documents")
+  return response.json()
+}
+
+export async function apiDeleteDocument(documentId: string) {
+  await apiFetch(`/api/documents/${documentId}`, { method: "DELETE" })
+}

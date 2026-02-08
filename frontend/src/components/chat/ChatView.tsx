@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { apiFetch, apiStreamChat } from "@/lib/api"
 import type { Message } from "@/types"
 import { MessageInput } from "./MessageInput"
@@ -17,6 +17,7 @@ export function ChatView({ threadId, onTitleUpdated }: ChatViewProps) {
   const [streamingContent, setStreamingContent] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const streamingRef = useRef("")
 
   useEffect(() => {
     if (!threadId) {
@@ -26,8 +27,8 @@ export function ChatView({ threadId, onTitleUpdated }: ChatViewProps) {
     loadMessages(threadId)
   }, [threadId])
 
-  async function loadMessages(tid: string) {
-    setLoadingMessages(true)
+  async function loadMessages(tid: string, showLoading = true) {
+    if (showLoading) setLoadingMessages(true)
     try {
       const res = await apiFetch(`/api/threads/${tid}/messages`)
       const data: Message[] = await res.json()
@@ -46,6 +47,7 @@ export function ChatView({ threadId, onTitleUpdated }: ChatViewProps) {
 
       setError(null)
       setChatState("sending")
+      streamingRef.current = ""
 
       // Optimistic user message
       const optimisticMsg: Message = {
@@ -65,12 +67,22 @@ export function ChatView({ threadId, onTitleUpdated }: ChatViewProps) {
         content,
         (token) => {
           setChatState("streaming")
+          streamingRef.current += token
           setStreamingContent((prev) => prev + token)
         },
-        (_messageId) => {
-          setChatState("idle")
+        (messageId) => {
+          // Append assistant message directly from streamed content (no re-fetch flash)
+          const assistantMsg: Message = {
+            id: messageId,
+            thread_id: threadId,
+            role: "assistant",
+            content: streamingRef.current,
+            created_at: new Date().toISOString(),
+          }
+          setMessages((prev) => [...prev, assistantMsg])
           setStreamingContent("")
-          loadMessages(threadId)
+          setChatState("idle")
+
           if (isFirstMessage) {
             onTitleUpdated()
           }

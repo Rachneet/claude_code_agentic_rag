@@ -4,12 +4,14 @@ import { AuthPage } from "@/components/auth/AuthPage"
 import { AppLayout } from "@/components/layout/AppLayout"
 import { ThreadSidebar } from "@/components/chat/ThreadSidebar"
 import { ChatView } from "@/components/chat/ChatView"
-import type { Thread } from "@/types"
+import { DocumentsView } from "@/components/documents/DocumentsView"
+import type { AppView, Thread } from "@/types"
 
 function AppContent() {
   const { user, loading } = useAuth()
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [activeView, setActiveView] = useState<AppView>("chat")
 
   const handleThreadCreated = useCallback((thread: Thread) => {
     setSelectedThreadId(thread.id)
@@ -41,18 +43,24 @@ function AppContent() {
   }
 
   return (
-    <AppLayout>
-      <ThreadSidebar
-        activeThreadId={selectedThreadId}
-        onSelectThread={setSelectedThreadId}
-        onThreadCreated={handleThreadCreated}
-        onThreadDeleted={handleThreadDeleted}
-        refreshKey={refreshKey}
-      />
-      <ChatView
-        threadId={selectedThreadId}
-        onTitleUpdated={handleTitleUpdated}
-      />
+    <AppLayout activeView={activeView} onViewChange={setActiveView}>
+      {activeView === "chat" ? (
+        <>
+          <ThreadSidebar
+            activeThreadId={selectedThreadId}
+            onSelectThread={setSelectedThreadId}
+            onThreadCreated={handleThreadCreated}
+            onThreadDeleted={handleThreadDeleted}
+            refreshKey={refreshKey}
+          />
+          <ChatView
+            threadId={selectedThreadId}
+            onTitleUpdated={handleTitleUpdated}
+          />
+        </>
+      ) : (
+        <DocumentsView />
+      )}
     </AppLayout>
   )
 }

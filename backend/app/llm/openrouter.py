@@ -1,20 +1,16 @@
+from __future__ import annotations
+
 import asyncio
 import json
-import re
 from typing import AsyncGenerator, Callable, Generator
 
-from huggingface_hub import InferenceClient
+import httpx
 from langsmith import traceable
 
 from app.config import settings
 from app.llm.base import LLMProvider
 
 _SENTINEL = object()
-
-
-def strip_think_tags(text: str) -> str:
-    """Remove <think>...</think> blocks from model output."""
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
 def _next_or_sentinel(gen):
@@ -27,60 +23,81 @@ def _next_or_sentinel(gen):
 
 def _convert_tools(tools: list[dict]) -> list[dict]:
     """Wrap provider-agnostic tool defs into OpenAI function-calling format."""
-    return [{"type": "function", "function": tool} for tool in tools]
+    return [
+        {
+            "type": "function",
+            "function": tool,
+        }
+        for tool in tools
+    ]
 
 
-class HuggingFaceProvider(LLMProvider):
-    """HuggingFace Inference API provider."""
+class OpenRouterProvider(LLMProvider):
+    """OpenRouter provider using raw httpx (OpenAI-compatible API)."""
 
     def __init__(self):
-        self.client = InferenceClient(
-            provider=settings.hf_provider,
-            api_key=settings.hf_token,
-        )
-        # Separate client for tool calls — 'auto' often routes to providers
-        # that don't support function calling, so we pin to one that does.
-        self.tool_client = InferenceClient(
-            provider=settings.hf_tool_provider,
-            api_key=settings.hf_token,
-        )
-        self.model = settings.hf_model
+        self.api_key = settings.openrouter_api_key
+        self.model = settings.openrouter_model
+        self.base_url = settings.openrouter_base_url.rstrip("/")
 
     @property
     def supports_tools(self) -> bool:
         return True
 
-    @traceable(name="hf_chat_completion", run_type="llm")
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    @traceable(name="openrouter_chat_completion", run_type="llm")
     def chat_completion(
         self,
         messages: list[dict],
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> str:
-        response = self.client.chat_completion(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
-        return strip_think_tags(response.choices[0].message.content)
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
 
-    def _chat_completion_stream_sync(
-        self,
-        messages: list[dict],
-        max_tokens: int = 2048,
-        temperature: float = 0.7,
-    ) -> Generator[str, None, None]:
-        stream = self.client.chat_completion(
-            model=self.model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stream=True,
+        resp = httpx.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=payload,
+            timeout=60.0,
         )
-        for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"] or ""
+
+    def _stream_sync(
+        self,
+        payload: dict,
+    ) -> Generator[str, None, None]:
+        """Sync SSE streaming generator — runs in a thread."""
+        with httpx.stream(
+            "POST",
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=payload,
+            timeout=120.0,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[len("data: "):]
+                if data_str.strip() == "[DONE]":
+                    break
+                chunk = json.loads(data_str)
+                delta = chunk["choices"][0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    yield content
 
     async def chat_completion_stream(
         self,
@@ -88,41 +105,24 @@ class HuggingFaceProvider(LLMProvider):
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> AsyncGenerator[str, None]:
-        loop = asyncio.get_event_loop()
-        gen = self._chat_completion_stream_sync(messages, max_tokens, temperature)
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
 
-        inside_think = False
-        buffer = ""
+        loop = asyncio.get_event_loop()
+        gen = self._stream_sync(payload)
 
         while True:
             token = await loop.run_in_executor(None, _next_or_sentinel, gen)
             if token is _SENTINEL:
                 break
+            yield token
 
-            buffer += token
-
-            if not inside_think and "<think>" in buffer:
-                before = buffer[: buffer.index("<think>")]
-                if before:
-                    yield before
-                buffer = buffer[buffer.index("<think>") :]
-                inside_think = True
-
-            if inside_think and "</think>" in buffer:
-                after = buffer[buffer.index("</think>") + len("</think>") :]
-                buffer = after
-                inside_think = False
-
-            if not inside_think and buffer and "<" not in buffer:
-                yield buffer
-                buffer = ""
-
-        if buffer and not inside_think:
-            cleaned = strip_think_tags(buffer)
-            if cleaned:
-                yield cleaned
-
-    @traceable(name="hf_chat_with_tools", run_type="llm")
+    @traceable(name="openrouter_chat_with_tools", run_type="llm")
     def chat_completion_with_tools(
         self,
         messages: list[dict],
@@ -130,29 +130,37 @@ class HuggingFaceProvider(LLMProvider):
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> dict:
-        """Non-streaming completion with tool calling."""
-        response = self.tool_client.chat_completion(
-            model=self.model,
-            messages=messages,
-            tools=_convert_tools(tools),
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "tools": _convert_tools(tools),
+        }
 
-        message = response.choices[0].message
+        resp = httpx.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=payload,
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        message = data["choices"][0]["message"]
         result = {"content": None, "tool_calls": None}
 
-        if message.tool_calls:
+        if message.get("tool_calls"):
             result["tool_calls"] = [
                 {
-                    "id": tc.id,
-                    "name": tc.function.name,
-                    "args": json.loads(tc.function.arguments),
+                    "id": tc["id"],
+                    "name": tc["function"]["name"],
+                    "args": json.loads(tc["function"]["arguments"]),
                 }
-                for tc in message.tool_calls
+                for tc in message["tool_calls"]
             ]
-        elif message.content:
-            result["content"] = strip_think_tags(message.content)
+        elif message.get("content"):
+            result["content"] = message["content"]
 
         return result
 
@@ -243,35 +251,17 @@ class HuggingFaceProvider(LLMProvider):
         updated_messages.extend(tool_results)
 
         # Step 5: Stream the final response (no tools)
-        gen = self._chat_completion_stream_sync(updated_messages, max_tokens, temperature)
+        payload = {
+            "model": self.model,
+            "messages": updated_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
 
-        inside_think = False
-        buffer = ""
-
+        gen = self._stream_sync(payload)
         while True:
             token = await loop.run_in_executor(None, _next_or_sentinel, gen)
             if token is _SENTINEL:
                 break
-
-            buffer += token
-
-            if not inside_think and "<think>" in buffer:
-                before = buffer[: buffer.index("<think>")]
-                if before:
-                    yield before
-                buffer = buffer[buffer.index("<think>") :]
-                inside_think = True
-
-            if inside_think and "</think>" in buffer:
-                after = buffer[buffer.index("</think>") + len("</think>") :]
-                buffer = after
-                inside_think = False
-
-            if not inside_think and buffer and "<" not in buffer:
-                yield buffer
-                buffer = ""
-
-        if buffer and not inside_think:
-            cleaned = strip_think_tags(buffer)
-            if cleaned:
-                yield cleaned
+            yield token

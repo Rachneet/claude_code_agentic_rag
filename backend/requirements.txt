@@ -8,3 +8,10 @@ httpx
 huggingface-hub
 sse-starlette
 langsmith
+google-genai
+python-multipart
+numpy
+pypdf
+python-docx
+beautifulsoup4
+simpleeval
