@@ -95,4 +95,12 @@ Track your progress through the masterclass. Update this file as you complete mo
 - [ ] End-to-end testing (requires Tavily API key for web search)
 
 ### Module 9: Sub-Agents
-- [ ] Not started
+- [x] Config settings (agent enable flags, max_iterations, max_tokens)
+- [x] LLM provider format_tool_messages() (base ABC, HuggingFace, OpenRouter, Gemini)
+- [x] Base agent with ReAct loop (multi-turn tool calling, iteration cap, LangSmith tracing)
+- [x] Research Agent (search_documents + web_search + fetch_url + calculator)
+- [x] Document Q&A Agent (search_documents + calculator, multi-hop reasoning)
+- [x] Task Planner Agent (all non-agent tools, max_iterations=10, sequential execution)
+- [x] Tool registry updated (3 agent tool declarations, recursion guard, agent dispatcher)
+- [x] Chat service updated (agent routing guidance in system prompt)
+- [ ] End-to-end testing (research, doc Q&A, planner agent workflows)

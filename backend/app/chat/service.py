@@ -67,15 +67,47 @@ def _build_tool_system_prompt() -> str:
             "Use this when the user asks about the current date, time, or needs timezone information."
         )
 
+    # Agent tools
+    if "research_agent" in tool_names:
+        tool_instructions.append(
+            "- **research_agent**: Delegate to a Research Agent for thorough investigation across "
+            "documents AND the web. Use for complex research requiring multiple sources and cross-referencing."
+        )
+    if "docqa_agent" in tool_names:
+        tool_instructions.append(
+            "- **docqa_agent**: Delegate to a Document Q&A Agent for deep multi-hop analysis of the "
+            "user's documents. Use for comparing across documents or detailed document analysis."
+        )
+    if "planner_agent" in tool_names:
+        tool_instructions.append(
+            "- **planner_agent**: Delegate to a Task Planner Agent for complex multi-step requests. "
+            "Use when the request involves multiple distinct sub-tasks that need sequential execution."
+        )
+
     base += "\n".join(tool_instructions)
-    base += (
+
+    # Routing guidance
+    has_agents = any(name in tool_names for name in ("research_agent", "docqa_agent", "planner_agent"))
+    routing = (
         "\n\n"
         "When you use search_documents and find relevant results, cite the sources in your answer. "
         "If no relevant documents are found, try web_search if available, or answer from your "
         "general knowledge and let the user know. "
-        "Do not use <think> tags or show your reasoning process. "
+    )
+    if has_agents:
+        routing += (
+            "\n\nRouting guidance:\n"
+            "- For simple, direct questions: use tools directly (search_documents, calculate, etc.)\n"
+            "- For complex research needing multiple sources: delegate to research_agent\n"
+            "- For multi-hop document analysis or cross-document comparison: delegate to docqa_agent\n"
+            "- For multi-step tasks with distinct sub-tasks: delegate to planner_agent\n"
+            "- When in doubt between direct tool use and an agent, prefer direct tool use for speed"
+        )
+    routing += (
+        "\n\nDo not use <think> tags or show your reasoning process. "
         "Respond directly with your answer."
     )
+    base += routing
 
     return base
 
